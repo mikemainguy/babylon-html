@@ -19,6 +19,7 @@ type HtmlImageData = {
 declare class HtmlMeshBuilder {
     static CreatePlane(name: string, options: HtmlMeshOptions, scene: Scene): Promise<Nullable<AbstractMesh>>;
     static CreateTexture(base64: string, scene: Scene): Promise<Texture>;
+    private static imageCache;
     static CreateImageData(node: HTMLElement): Promise<Nullable<HtmlImageData>>;
     private static BuildPlane;
 }

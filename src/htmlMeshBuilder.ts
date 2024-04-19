@@ -7,7 +7,6 @@ import {
     StandardMaterial,
     Texture
 } from "@babylonjs/core";
-
 export type HtmlMeshOptions = {
     html: string,
     width?: number,
@@ -27,6 +26,7 @@ export type HtmlImageData = {
 
 export class HtmlMeshBuilder {
     public static async CreatePlane(name: string, options: HtmlMeshOptions, scene: Scene): Promise<Nullable<AbstractMesh>> {
+
         const mainElement = document.createElement('div');
         const hoverElement = document.createElement('div');
         const clickElement = document.createElement('div');
@@ -105,44 +105,62 @@ export class HtmlMeshBuilder {
     public static async CreateTexture(base64: string, scene: Scene): Promise<Texture> {
         return new Texture(base64, scene);
     }
+    private static imageCache: Map<string, HtmlImageData> = new Map<string, HtmlImageData>();
 
     public static async CreateImageData(node: HTMLElement): Promise<Nullable<HtmlImageData>> {
-        try {
+        const bytes = new TextEncoder().encode(node.innerHTML);
+        const digest = await crypto.subtle.digest('SHA-256', bytes);
+        const resultBytes = [...new Uint8Array(digest)];
+        const hash = resultBytes.map(x => x.toString(16).padStart(2, '0')).join("");
+
+        const data =HtmlMeshBuilder.imageCache.get(hash);
+        if (!data) {
             document.body.appendChild(node);
-            const image64 = await domtoimage.toPng(node, {bgcolor: 'transparent', height: node.clientHeight, width: node.clientWidth});
+            const image64 = await domtoimage.toPng(node, {
+                bgcolor: 'transparent',
+                height: node.clientHeight,
+                width: node.clientWidth
+            });
             document.body.removeChild(node);
-            const image = new Image();
-            image.decoding = 'sync';
-            image.loading= 'eager';
-            image.src = image64;
-            let retries = 1;
+            HtmlMeshBuilder.imageCache.set(node.innerHTML, image64);
+
 
             try {
-                await image.decode();
-            } catch (err) {
-                console.warn('Image decode failed, retrying')
-                while (retries < 3) {
-                    try {
-                        console.warn('Retrying attempt '+ retries);
-                        await image.decode();
-                        break;
-                    } catch (err) {
-                        retries++;
-                        console.warn('Retry attempt '+ retries + ' failed');
+                const image = new Image();
+                image.decoding = 'sync';
+                image.loading = 'eager';
+                image.src = image64;
+                let retries = 1;
+                try {
+                    await image.decode();
+                } catch (err) {
+                    console.warn('Image decode failed, retrying')
+                    while (retries < 3) {
+                        try {
+                            console.warn('Retrying attempt ' + retries);
+                            await image.decode();
+                            break;
+                        } catch (err) {
+                            retries++;
+                            console.warn('Retry attempt ' + retries + ' failed');
+                        }
                     }
                 }
+                if (retries > 1) {
+                    console.warn('Image decode succeeded after ' + retries + ' retries. You may be trying to create too many or too complex html nodes');
+                }
+                const width = image.width;
+                const height = image.height;
+                const output = {width: width, height: height, base64Url: image64};
+                HtmlMeshBuilder.imageCache.set(hash, output);
+                return output;
+            } catch (err) {
+                console.error(err);
+                console.error(node);
+                return null;
             }
-            if (retries > 1) {
-                console.warn('Image decode succeeded after '+ retries + ' retries. You may be trying to create too many or too complex html nodes');
-            }
-
-            const width = image.width;
-            const height = image.height;
-            return {width: width, height: height, base64Url: image64};
-        } catch (err) {
-            console.error(err);
-            console.log(node);
-            return null;
+        } else {
+            return data;
         }
     }
     private static async BuildPlane(name: string, options: HtmlMeshOptions, image: HtmlImageData, scene: Scene) {
@@ -165,18 +183,7 @@ export class HtmlMeshBuilder {
         return plane;
     }
 }
-const waitForLoad  = (image2: any) => {
-    return new
-    Promise<any>((resolve, reject) => {
-        image2.onload = () => {
-            resolve(null);
-        }
-        image2.onerror = () => {
-            reject();
-        }
 
-    })
-}
 function defaultImageIfNull(image: Nullable<HtmlImageData>, defaultImage: HtmlImageData): HtmlImageData {
     if (image == null) {
         return defaultImage;

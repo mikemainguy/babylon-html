@@ -28,7 +28,7 @@ import {
   StandardMaterial,
   Texture
 } from "@babylonjs/core";
-var HtmlMeshBuilder = class _HtmlMeshBuilder {
+var _HtmlMeshBuilder = class _HtmlMeshBuilder {
   static CreatePlane(name, options, scene) {
     return __async(this, null, function* () {
       const mainElement = document.createElement("div");
@@ -129,40 +129,56 @@ var HtmlMeshBuilder = class _HtmlMeshBuilder {
   }
   static CreateImageData(node) {
     return __async(this, null, function* () {
-      try {
+      const bytes = new TextEncoder().encode(node.innerHTML);
+      const digest = yield crypto.subtle.digest("SHA-256", bytes);
+      const resultBytes = [...new Uint8Array(digest)];
+      const hash = resultBytes.map((x) => x.toString(16).padStart(2, "0")).join("");
+      const data = _HtmlMeshBuilder.imageCache.get(hash);
+      if (!data) {
         document.body.appendChild(node);
-        const image64 = yield domtoimage.toPng(node, { bgcolor: "transparent", height: node.clientHeight, width: node.clientWidth });
+        const image64 = yield domtoimage.toPng(node, {
+          bgcolor: "transparent",
+          height: node.clientHeight,
+          width: node.clientWidth
+        });
         document.body.removeChild(node);
-        const image = new Image();
-        image.decoding = "sync";
-        image.loading = "eager";
-        image.src = image64;
-        let retries = 1;
+        _HtmlMeshBuilder.imageCache.set(node.innerHTML, image64);
         try {
-          yield image.decode();
-        } catch (err) {
-          console.warn("Image decode failed, retrying");
-          while (retries < 3) {
-            try {
-              console.warn("Retrying attempt " + retries);
-              yield image.decode();
-              break;
-            } catch (err2) {
-              retries++;
-              console.warn("Retry attempt " + retries + " failed");
+          const image = new Image();
+          image.decoding = "sync";
+          image.loading = "eager";
+          image.src = image64;
+          let retries = 1;
+          try {
+            yield image.decode();
+          } catch (err) {
+            console.warn("Image decode failed, retrying");
+            while (retries < 3) {
+              try {
+                console.warn("Retrying attempt " + retries);
+                yield image.decode();
+                break;
+              } catch (err2) {
+                retries++;
+                console.warn("Retry attempt " + retries + " failed");
+              }
             }
           }
+          if (retries > 1) {
+            console.warn("Image decode succeeded after " + retries + " retries. You may be trying to create too many or too complex html nodes");
+          }
+          const width = image.width;
+          const height = image.height;
+          const output = { width, height, base64Url: image64 };
+          _HtmlMeshBuilder.imageCache.set(hash, output);
+          return output;
+        } catch (err) {
+          console.error(err);
+          console.error(node);
+          return null;
         }
-        if (retries > 1) {
-          console.warn("Image decode succeeded after " + retries + " retries. You may be trying to create too many or too complex html nodes");
-        }
-        const width = image.width;
-        const height = image.height;
-        return { width, height, base64Url: image64 };
-      } catch (err) {
-        console.error(err);
-        console.log(node);
-        return null;
+      } else {
+        return data;
       }
     });
   }
@@ -188,6 +204,8 @@ var HtmlMeshBuilder = class _HtmlMeshBuilder {
     });
   }
 };
+_HtmlMeshBuilder.imageCache = /* @__PURE__ */ new Map();
+var HtmlMeshBuilder = _HtmlMeshBuilder;
 function defaultImageIfNull(image, defaultImage) {
   if (image == null) {
     return defaultImage;
