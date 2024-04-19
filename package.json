@@ -1,0 +1,34 @@
+{
+  "name": "babylon-html",
+  "version": "0.0.1",
+  "description": "Babylon library for rendering html in webxr",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "jest"
+  },
+  "keywords": [
+    "babylon",
+    "typescript",
+    "html",
+    "rendering",
+    "webxr"
+  ],
+  "author": "Michael Mainguy",
+  "license": "MIT",
+  "dependencies": {
+    "@babylonjs/core": "^7.1.0",
+    "dom-to-image-more": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/dom-to-image": "^2.6.7",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5"
+  }
+}
